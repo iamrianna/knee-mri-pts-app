@@ -1,4 +1,5 @@
 import os
+import glob
 import pickle
 import numpy as np
 import pandas as pd
@@ -50,6 +51,20 @@ def load_mri_volume(file_path):
         st.error(f"Error loading volume file `{file_path}`: {e}")
         return None
 
+def get_available_mri_files():
+    """Dynamically finds all .pck files in sample_data/, volumetric_data/, or root directory."""
+    files = {}
+    search_paths = ["sample_data/*.pck", "volumetric_data/*.pck", "*.pck"]
+    
+    for path_pattern in search_paths:
+        for file in glob.glob(path_pattern):
+            filename = os.path.basename(file)
+            rec_id = os.path.splitext(filename)[0]
+            if rec_id not in files:
+                files[rec_id] = file
+                
+    return files
+
 # ==========================================
 # 3. SIDEBAR CONTROLS
 # ==========================================
@@ -57,17 +72,26 @@ st.sidebar.title("🦴 KneeMRI PACS Workstation")
 st.sidebar.markdown("---")
 
 df_meta = load_metadata()
+available_files = get_available_mri_files()
 
-if df_meta is not None:
-    st.sidebar.subheader("📁 Record Selection")
-    vol_col = df_meta.columns[0]
-    selected_id = st.sidebar.selectbox("Select Patient Record ID:", df_meta[vol_col].unique())
-    vol_path = f"volumetric_data/{selected_id}.pck"
-    if not os.path.exists(vol_path):
-        vol_path = "example.pck"
+st.sidebar.subheader("📁 Record Selection")
+
+if available_files:
+    # Sort IDs logically
+    record_ids = sorted(list(available_files.keys()))
+    selected_id = st.sidebar.selectbox("Select Patient Record ID:", record_ids)
+    vol_path = available_files[selected_id]
 else:
-    st.sidebar.info("Using default `example.pck` record.")
+    st.sidebar.warning("No `.pck` files detected. Ensure `example.pck` or `sample_data/` folder exists.")
     vol_path = "example.pck"
+
+# Display patient diagnosis metadata if available
+if df_meta is not None and available_files:
+    vol_col = df_meta.columns[0]
+    matched_meta = df_meta[df_meta[vol_col].astype(str) == str(selected_id)]
+    if not matched_meta.empty:
+        st.sidebar.markdown("**Record Metadata:**")
+        st.sidebar.dataframe(matched_meta.T, use_container_width=True)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("📐 Surgical Parameters")
@@ -147,7 +171,7 @@ with main_col:
             ))
 
             fig_mri.update_layout(
-                title=f"Sagittal View - Slice {slice_idx + 1}/{num_slices}",
+                title=f"Sagittal View - Slice {slice_idx + 1}/{num_slices} ({os.path.basename(vol_path)})",
                 paper_bgcolor="#0d1117",
                 plot_bgcolor="#0d1117",
                 xaxis=dict(visible=False),
@@ -158,7 +182,7 @@ with main_col:
 
             st.plotly_chart(fig_mri, use_container_width=True)
     else:
-        st.error(f"MRI data file `{vol_path}` not found. Place `example.pck` or extract `volumetric_data.7z` into `volumetric_data/`.")
+        st.error(f"MRI data file `{vol_path}` not found. Place `.pck` files in root or `sample_data/` directory.")
 
 with side_col:
     st.subheader("📋 Risk Diagnostic Engine")
