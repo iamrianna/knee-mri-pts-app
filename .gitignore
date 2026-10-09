@@ -1,0 +1,10 @@
+# Ignore heavy dataset archives and uncompressed volumes
+*.7z
+volumetric_data/*.pck
+!volumetric_data/.gitkeep
+
+# Python cache files
+__pycache__/
+*.pyc
+.DS_Store
+.env
